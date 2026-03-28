@@ -9,7 +9,7 @@ function speak(text) {
     speechSynthesis.speak(msg);
 }
 
-// 📷 Camera
+// 📷 Start Camera
 async function startCamera() {
     if (cameraOn) return;
 
@@ -23,6 +23,7 @@ async function startCamera() {
     }
 }
 
+// 🛑 Stop Camera
 function stopCamera() {
     if (stream) {
         stream.getTracks().forEach(track => track.stop());
@@ -31,37 +32,42 @@ function stopCamera() {
     }
 }
 
-// 🎤 Voice
+// 🎤 Start Voice (FIXED)
 function startVoice() {
     if (isListening) return;
 
-    try {
-        recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-        recognition.continuous = true;
+    recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.continuous = true;
+    recognition.interimResults = false;
 
-        recognition.onresult = function (event) {
-            let command = event.results[event.results.length - 1][0].transcript.toLowerCase();
-            console.log(command);
+    recognition.onresult = function (event) {
+        let command = event.results[event.results.length - 1][0].transcript.toLowerCase();
+        console.log("Command:", command);
 
-            if (command.includes("start camera")) startCamera();
-            else if (command.includes("stop camera")) stopCamera();
-            else if (command.includes("location")) getLocation();
-            else if (command.includes("stop voice")) stopVoice();
-            else speak("Command not recognized");
-        };
+        if (command.includes("start camera")) startCamera();
+        else if (command.includes("stop camera")) stopCamera();
+        else if (command.includes("location")) getLocation();
+        else if (command.includes("stop voice")) stopVoice();
+        else speak("Command not recognized");
+    };
 
-        recognition.start();
-        isListening = true;
-        speak("Voice control started");
-    } catch {
-        speak("Microphone not supported");
-    }
+    // 🔥 IMPORTANT: auto-restart mic
+    recognition.onend = function () {
+        if (isListening) {
+            recognition.start();
+        }
+    };
+
+    recognition.start();
+    isListening = true;
+    speak("Voice control started");
 }
 
+// 🛑 Stop Voice
 function stopVoice() {
     if (recognition) {
-        recognition.stop();
         isListening = false;
+        recognition.stop();
         speak("Voice stopped");
     }
 }
@@ -77,7 +83,12 @@ function getLocation() {
     });
 }
 
-// 👆 TAP ANYWHERE → START MIC
-document.body.addEventListener("click", function () {
+// 👆 TOUCH ANYWHERE (FIXED)
+document.body.addEventListener("touchstart", function () {
     startVoice();
-});
+}, { passive: true });
+
+// 🔊 Auto instruction
+window.onload = function () {
+    speak("Tap anywhere to start voice control");
+};
