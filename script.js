@@ -43,32 +43,44 @@ function startVoice() {
     try {
         recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
         recognition.continuous = true;
-        recognition.interimResults = false;
+        recognition.interimResults = true; // 🔥 important for live text
 
         recognition.onresult = function (event) {
-            let result = event.results[event.results.length - 1][0];
-            let command = result.transcript.toLowerCase().trim();
-            let confidence = result.confidence;
+            let last = event.results[event.results.length - 1];
+            let transcript = last[0].transcript.toLowerCase().trim();
+            let confidence = last[0].confidence;
 
-            console.log("Heard:", command, "Confidence:", confidence);
+            // 📝 Show live speech
+            document.getElementById("heardText").innerText = "You said: " + transcript;
+            document.getElementById("confidenceText").innerText = "Confidence: " + confidence.toFixed(2);
 
-            // ❗ Ignore weak/noisy input
-            if (confidence < 0.5 || command.length < 3) return;
+            console.log("Heard:", transcript, "Confidence:", confidence);
 
-            // 🔥 Flexible matching
-            if (command.includes("camera") && command.includes("start")) {
+            // Only act on final result
+            if (!last.isFinal) return;
+
+            if (confidence < 0.4 || transcript.length < 2) return;
+
+            // 🤖 Command detection
+            if (transcript.includes("camera") && transcript.includes("start")) {
+                document.getElementById("statusText").innerText = "Action: Starting Camera";
                 startCamera();
             }
-            else if (command.includes("camera") && command.includes("stop")) {
+            else if (transcript.includes("camera") && transcript.includes("stop")) {
+                document.getElementById("statusText").innerText = "Action: Stopping Camera";
                 stopCamera();
             }
-            else if (command.includes("location")) {
+            else if (transcript.includes("location")) {
+                document.getElementById("statusText").innerText = "Action: Getting Location";
                 getLocation();
             }
-            else if (command.includes("stop")) {
+            else if (transcript.includes("stop")) {
+                document.getElementById("statusText").innerText = "Action: Stopping Voice";
                 stopVoiceSafe();
             }
-            // ❌ removed annoying "not recognized"
+            else {
+                document.getElementById("statusText").innerText = "Action: Not recognized";
+            }
         };
 
         recognition.onerror = function () {
@@ -84,7 +96,7 @@ function startVoice() {
     }
 }
 
-// 🛑 Safe Stop Voice
+// 🛑 Stop Voice
 function stopVoiceSafe() {
     if (recognition) {
         try {
@@ -97,7 +109,7 @@ function stopVoiceSafe() {
     console.log("Mic OFF");
 }
 
-// 📍 Get Location
+// 📍 Location
 function getLocation() {
     navigator.geolocation.getCurrentPosition(pos => {
         let lat = pos.coords.latitude;
@@ -112,22 +124,18 @@ function getLocation() {
 // ✋ TOUCH CONTROLS
 // ==========================
 
-// HOLD → mic ON
 document.body.addEventListener("touchstart", function () {
     startVoice();
 }, { passive: true });
 
-// RELEASE → mic OFF
 document.body.addEventListener("touchend", function () {
     stopVoiceSafe();
 });
 
-// INTERRUPT → mic OFF
 document.body.addEventListener("touchcancel", function () {
     stopVoiceSafe();
 });
 
-// MOVE → mic OFF
 document.body.addEventListener("touchmove", function () {
     stopVoiceSafe();
 });
