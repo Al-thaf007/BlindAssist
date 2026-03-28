@@ -7,7 +7,6 @@ let lastSpoken = "";
 let stream = null;
 let recognition = null;
 
-
 // =====================
 // LOAD AI MODEL
 // =====================
@@ -22,10 +21,6 @@ async function loadModel() {
     }
 }
 
-window.onload = function () {
-    speak("Press start voice button");
-};
-
 // =====================
 // START CAMERA
 // =====================
@@ -36,23 +31,29 @@ function startCamera() {
         .then(function (s) {
             stream = s;
             video.srcObject = stream;
+            video.play();
+
+            speak("Camera started");
+
+            loadModel().then(() => {
+                startDetection(video);
+            });
         })
         .catch(function (err) {
             console.log(err);
             alert("Camera not working");
         });
 }
+
 // =====================
 // STOP CAMERA
 // =====================
 function stopCamera() {
     if (stream) {
-        stream.getTracks().forEach(function (track) {
-            track.stop();
-        });
-
+        stream.getTracks().forEach(track => track.stop());
         document.getElementById("camera").srcObject = null;
         stream = null;
+        speak("Camera stopped");
     }
 }
 
@@ -73,7 +74,6 @@ function startDetection(video) {
 
         predictions.forEach(pred => {
             if (pred.score > 0.6) {
-
                 let [x, y, width, height] = pred.bbox;
                 let area = width * height;
 
@@ -123,13 +123,18 @@ function getLocation() {
 }
 
 // =====================
+// VOICE COMMAND AUTO START
+// =====================
+document.body.addEventListener("click", () => {
+    startListening();
+}, { once: true });
+
+// =====================
 // VOICE COMMAND
 // =====================
-let recognition = null;
-
 function startListening() {
     if (recognition) {
-        recognition.stop(); // reset if already running
+        recognition.stop();
         recognition = null;
     }
 
@@ -139,10 +144,6 @@ function startListening() {
     recognition.lang = "en-US";
 
     recognition.start();
-
-    recognition.onstart = function () {
-        console.log("Voice started");
-    };
 
     recognition.onresult = function (event) {
         let text = event.results[event.results.length - 1][0].transcript.toLowerCase();
@@ -155,22 +156,22 @@ function startListening() {
         if (text.includes("stop") && text.includes("camera")) {
             stopCamera();
         }
-    };
 
-    recognition.onerror = function (event) {
-        console.log("Error:", event.error);
-    };
+        if (text.includes("location")) {
+            getLocation();
+        }
 
-    recognition.onend = function () {
-        console.log("Voice stopped");
+        if (text.includes("stop voice")) {
+            stopListening();
+        }
     };
 }
+
 // =====================
 // STOP VOICE
 // =====================
 function stopListening() {
     if (recognition) {
-        recognition.onend = null;
         recognition.stop();
         recognition = null;
         speak("Voice stopped");
@@ -182,7 +183,5 @@ function stopListening() {
 // =====================
 function speak(text) {
     let speech = new SpeechSynthesisUtterance(text);
-    speech.rate = 1;
-    speech.pitch = 1;
     window.speechSynthesis.speak(speech);
 }
