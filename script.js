@@ -5,15 +5,16 @@ let cameraOn = false;
 
 let model = null;
 let detecting = false;
+let userInteracted = false;
 
-// 🔊 Speak (always speak, no blocking)
+// 🔊 Speak
 function speak(text) {
     const msg = new SpeechSynthesisUtterance(text);
     speechSynthesis.cancel();
     speechSynthesis.speak(msg);
 }
 
-// 🧠 Debug update
+// 🧠 Debug
 function updateStatus(text) {
     console.log("STATUS:", text);
     const el = document.getElementById("statusText");
@@ -21,31 +22,22 @@ function updateStatus(text) {
 }
 
 // ==========================
-// 🤖 LOAD MODEL (DEBUG HEAVY)
+// 🤖 LOAD MODEL
 // ==========================
 async function loadModel() {
     try {
         updateStatus("Loading AI...");
-        speak("Loading AI model");
-
-        // 🔍 CHECK IF LIB LOADED
-        if (typeof cocoSsd === "undefined") {
-            updateStatus("cocoSSD not loaded");
-            speak("AI library not loaded");
-            return;
-        }
+        speak("Loading AI");
 
         model = await cocoSsd.load();
 
         updateStatus("Detection ready");
         speak("Detection ready");
 
-        console.log("✅ MODEL SUCCESS");
-
     } catch (e) {
-        console.error("MODEL ERROR:", e);
+        console.error(e);
         updateStatus("Model failed");
-        speak("Model failed to load");
+        speak("Model failed");
     }
 }
 
@@ -63,24 +55,17 @@ async function startCamera() {
         });
 
         video.srcObject = stream;
+        await video.play();
 
-        video.onloadedmetadata = () => {
-            video.play();
+        cameraOn = true;
+        updateStatus("Camera started");
+        speak("Camera started");
 
-            cameraOn = true;
-            speak("Camera started");
-            updateStatus("Camera started");
-
-            if (model) {
-                startDetection();
-            } else {
-                speak("Model not ready");
-            }
-        };
+        if (model) startDetection();
 
     } catch (err) {
         console.error(err);
-        speak("Camera permission denied");
+        speak("Camera blocked. Tap screen first");
     }
 }
 
@@ -93,60 +78,46 @@ function stopCamera() {
         cameraOn = false;
         detecting = false;
 
-        speak("Camera stopped");
         updateStatus("Camera stopped");
+        speak("Camera stopped");
     }
 }
 
 // ==========================
-// 🚧 DETECTION
+// 🚧 Detection
 // ==========================
 function startDetection() {
-    if (!model) {
-        updateStatus("Model missing");
-        speak("Model missing");
-        return;
-    }
+    if (!model) return;
 
     const video = document.getElementById("camera");
     detecting = true;
 
     updateStatus("Detection running");
-    console.log("🚀 Detection started");
 
     setInterval(async () => {
         if (!detecting || !cameraOn) return;
 
-        try {
-            const predictions = await model.detect(video);
+        const predictions = await model.detect(video);
 
-            console.log("Objects:", predictions);
+        let found = false;
 
-            let found = false;
+        predictions.forEach(p => {
+            const [x, y, w, h] = p.bbox;
+            let centerX = x + w / 2;
+            let vw = video.videoWidth;
 
-            predictions.forEach(p => {
-                const [x, y, w, h] = p.bbox;
-
-                let centerX = x + w / 2;
-                let vw = video.videoWidth;
-
-                if (
-                    centerX > vw * 0.3 &&
-                    centerX < vw * 0.7 &&
-                    p.score > 0.5
-                ) {
-                    found = true;
-                }
-            });
-
-            if (found) {
-                updateStatus("Obstacle ahead");
-                speak("Obstacle ahead");
+            if (
+                centerX > vw * 0.3 &&
+                centerX < vw * 0.7 &&
+                p.score > 0.5
+            ) {
+                found = true;
             }
+        });
 
-        } catch (err) {
-            console.error("Detection error:", err);
-            speak("Detection error");
+        if (found) {
+            updateStatus("Obstacle ahead");
+            speak("Obstacle ahead");
         }
 
     }, 2000);
@@ -169,7 +140,10 @@ function startVoice() {
 
             speak("You said " + text);
 
-            if (text.includes("start camera")) startCamera();
+            if (text.includes("start camera")) {
+                if (!cameraOn) startCamera();
+            }
+
             else if (text.includes("stop camera")) stopCamera();
         };
 
@@ -195,16 +169,35 @@ function stopVoiceSafe() {
 // ==========================
 // TOUCH + MOUSE
 // ==========================
-document.body.addEventListener("touchstart", () => startVoice(), { passive: true });
+document.body.addEventListener("touchstart", () => {
+    userInteracted = true;
+
+    // 🔥 FIRST TOUCH → FORCE CAMERA PERMISSION
+    if (!cameraOn) {
+        startCamera();
+    }
+
+    startVoice();
+}, { passive: true });
+
 document.body.addEventListener("touchend", () => stopVoiceSafe());
 
-document.body.addEventListener("mousedown", () => startVoice());
+document.body.addEventListener("mousedown", () => {
+    userInteracted = true;
+
+    if (!cameraOn) {
+        startCamera();
+    }
+
+    startVoice();
+});
+
 document.body.addEventListener("mouseup", () => stopVoiceSafe());
 
 // ==========================
 // INIT
 // ==========================
 window.onload = function () {
-    speak("System starting");
+    speak("Hold screen and speak");
     loadModel();
 };
