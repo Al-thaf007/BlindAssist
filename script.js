@@ -3,19 +3,24 @@ let recognition = null;
 let isListening = false;
 let cameraOn = false;
 
-// 🔊 Speak
+// 🔊 Speak (no overlap)
 function speak(text) {
     const msg = new SpeechSynthesisUtterance(text);
-    speechSynthesis.cancel(); // stop overlapping speech
+    speechSynthesis.cancel();
     speechSynthesis.speak(msg);
 }
 
-// 📷 Start Camera
+// 📷 Start Camera (BACK CAMERA)
 async function startCamera() {
     if (cameraOn) return;
 
     try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: "environment"
+            }
+        });
+
         document.getElementById("camera").srcObject = stream;
         cameraOn = true;
         speak("Camera started");
@@ -49,30 +54,43 @@ function startVoice() {
             if (command.includes("start camera")) startCamera();
             else if (command.includes("stop camera")) stopCamera();
             else if (command.includes("location")) getLocation();
+            else if (command.includes("stop voice")) stopVoiceSafe();
             else speak("Command not recognized");
         };
 
         recognition.onerror = function () {
-            stopVoice();
+            stopVoiceSafe();
+        };
+
+        recognition.onend = function () {
+            // prevent auto restart after release
+            if (!isListening) return;
         };
 
         recognition.start();
         isListening = true;
+        console.log("Mic ON");
+
     } catch {
         speak("Microphone not supported");
     }
 }
 
-// 🛑 Stop Voice (Release)
-function stopVoice() {
-    if (recognition && isListening) {
-        recognition.stop();
+// 🛑 Safe Stop Voice
+function stopVoiceSafe() {
+    if (recognition) {
+        try {
+            recognition.onend = null;
+            recognition.stop();
+        } catch (e) { }
         recognition = null;
-        isListening = false;
     }
+
+    isListening = false;
+    console.log("Mic OFF");
 }
 
-// 📍 Location
+// 📍 Get Location
 function getLocation() {
     navigator.geolocation.getCurrentPosition(pos => {
         let lat = pos.coords.latitude;
@@ -83,17 +101,33 @@ function getLocation() {
     });
 }
 
-// ✋ HOLD → mic ON
+// ==========================
+// ✋ TOUCH CONTROLS
+// ==========================
+
+// HOLD → mic ON
 document.body.addEventListener("touchstart", function () {
     startVoice();
 }, { passive: true });
 
-// 🖐️ RELEASE → mic OFF
+// RELEASE → mic OFF
 document.body.addEventListener("touchend", function () {
-    stopVoice();
+    stopVoiceSafe();
 });
 
-// 🔊 Auto instruction
+// INTERRUPT → mic OFF
+document.body.addEventListener("touchcancel", function () {
+    stopVoiceSafe();
+});
+
+// MOVE → mic OFF (prevents stuck)
+document.body.addEventListener("touchmove", function () {
+    stopVoiceSafe();
+});
+
+// ==========================
+// 🔊 Auto Instruction
+// ==========================
 window.onload = function () {
     speak("Hold anywhere and speak your command");
 };
