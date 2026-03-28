@@ -5,30 +5,47 @@ let cameraOn = false;
 
 let model = null;
 let detecting = false;
-let lastSpokenTime = 0;
 
-// 🔊 Speak (no overlap + cooldown)
+// 🔊 Speak (always speak, no blocking)
 function speak(text) {
-    const now = Date.now();
-    if (now - lastSpokenTime < 3000) return;
-
-    lastSpokenTime = now;
-
     const msg = new SpeechSynthesisUtterance(text);
     speechSynthesis.cancel();
     speechSynthesis.speak(msg);
 }
 
+// 🧠 Debug update
+function updateStatus(text) {
+    console.log("STATUS:", text);
+    const el = document.getElementById("statusText");
+    if (el) el.innerText = "Action: " + text;
+}
+
 // ==========================
-// 🤖 Load AI Model
+// 🤖 LOAD MODEL (DEBUG HEAVY)
 // ==========================
 async function loadModel() {
     try {
+        updateStatus("Loading AI...");
+        speak("Loading AI model");
+
+        // 🔍 CHECK IF LIB LOADED
+        if (typeof cocoSsd === "undefined") {
+            updateStatus("cocoSSD not loaded");
+            speak("AI library not loaded");
+            return;
+        }
+
         model = await cocoSsd.load();
-        console.log("✅ Model Loaded");
+
+        updateStatus("Detection ready");
         speak("Detection ready");
+
+        console.log("✅ MODEL SUCCESS");
+
     } catch (e) {
-        console.error("Model load failed", e);
+        console.error("MODEL ERROR:", e);
+        updateStatus("Model failed");
+        speak("Model failed to load");
     }
 }
 
@@ -39,49 +56,62 @@ async function startCamera() {
     if (cameraOn) return;
 
     try {
+        const video = document.getElementById("camera");
+
         stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: "environment" }
         });
 
-        const video = document.getElementById("camera");
         video.srcObject = stream;
 
-        // 🔥 WAIT until video is ready
-        video.onloadeddata = async () => {
+        video.onloadedmetadata = () => {
+            video.play();
+
             cameraOn = true;
             speak("Camera started");
+            updateStatus("Camera started");
 
-            await loadModel();   // ensure model loads
-            startDetection();    // start detection AFTER ready
+            if (model) {
+                startDetection();
+            } else {
+                speak("Model not ready");
+            }
         };
 
-    } catch {
+    } catch (err) {
+        console.error(err);
         speak("Camera permission denied");
     }
 }
 
+// ==========================
 // 🛑 Stop Camera
+// ==========================
 function stopCamera() {
     if (stream) {
         stream.getTracks().forEach(track => track.stop());
         cameraOn = false;
         detecting = false;
+
         speak("Camera stopped");
+        updateStatus("Camera stopped");
     }
 }
 
 // ==========================
-// 🚧 DETECTION LOOP
+// 🚧 DETECTION
 // ==========================
-async function startDetection() {
+function startDetection() {
     if (!model) {
-        console.log("❌ Model not ready");
+        updateStatus("Model missing");
+        speak("Model missing");
         return;
     }
 
     const video = document.getElementById("camera");
     detecting = true;
 
+    updateStatus("Detection running");
     console.log("🚀 Detection started");
 
     setInterval(async () => {
@@ -92,39 +122,38 @@ async function startDetection() {
 
             console.log("Objects:", predictions);
 
-            let foundObstacle = false;
+            let found = false;
 
             predictions.forEach(p => {
-                const [x, y, width, height] = p.bbox;
+                const [x, y, w, h] = p.bbox;
 
-                let centerX = x + width / 2;
-                let videoWidth = video.videoWidth;
+                let centerX = x + w / 2;
+                let vw = video.videoWidth;
 
-                // 🎯 FRONT AREA
                 if (
-                    centerX > videoWidth * 0.3 &&
-                    centerX < videoWidth * 0.7 &&
-                    p.score > 0.6 &&
-                    width > videoWidth * 0.1
+                    centerX > vw * 0.3 &&
+                    centerX < vw * 0.7 &&
+                    p.score > 0.5
                 ) {
-                    foundObstacle = true;
+                    found = true;
                 }
             });
 
-            if (foundObstacle) {
-                console.log("🚧 Obstacle detected");
+            if (found) {
+                updateStatus("Obstacle ahead");
                 speak("Obstacle ahead");
             }
 
         } catch (err) {
             console.error("Detection error:", err);
+            speak("Detection error");
         }
 
     }, 2000);
 }
 
 // ==========================
-// 🎤 VOICE CONTROL
+// 🎤 Voice
 // ==========================
 function startVoice() {
     if (isListening) return;
@@ -132,20 +161,16 @@ function startVoice() {
     try {
         recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
         recognition.continuous = true;
-        recognition.interimResults = true;
 
         recognition.onresult = function (event) {
-            let last = event.results[event.results.length - 1];
-            let transcript = last[0].transcript.toLowerCase().trim();
+            let text = event.results[event.results.length - 1][0].transcript.toLowerCase();
 
-            document.getElementById("heardText").innerText = "You said: " + transcript;
+            document.getElementById("heardText").innerText = "You said: " + text;
 
-            if (!last.isFinal) return;
+            speak("You said " + text);
 
-            speak("You said " + transcript);
-
-            if (transcript.includes("start camera")) startCamera();
-            else if (transcript.includes("stop camera")) stopCamera();
+            if (text.includes("start camera")) startCamera();
+            else if (text.includes("stop camera")) stopCamera();
         };
 
         recognition.start();
@@ -156,7 +181,9 @@ function startVoice() {
     }
 }
 
-// 🛑 Stop Voice
+// ==========================
+// STOP VOICE
+// ==========================
 function stopVoiceSafe() {
     if (recognition) {
         try { recognition.stop(); } catch { }
@@ -178,5 +205,6 @@ document.body.addEventListener("mouseup", () => stopVoiceSafe());
 // INIT
 // ==========================
 window.onload = function () {
-    speak("Hold and say start camera");
+    speak("System starting");
+    loadModel();
 };

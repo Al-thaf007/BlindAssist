@@ -10,20 +10,27 @@
 </head>
 
 <body>
+
+    <!-- Debug -->
     <div class="debug">
         <p id="heardText">You said: -</p>
         <p id="confidenceText">Confidence: -</p>
         <p id="statusText">Action: -</p>
     </div>
+
+    <!-- Camera -->
     <video id="camera" autoplay playsinline></video>
 
+    <!-- Instruction -->
     <div class="overlay">
-        Tap anywhere to start voice control
+        Hold screen or mouse and speak
     </div>
 
-    <!-- JS -->
+    <!-- AI -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+    <!-- JS -->
     <script src="script.js"></script>
 
 </body>
