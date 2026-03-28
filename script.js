@@ -3,14 +3,27 @@ let recognition = null;
 let isListening = false;
 let cameraOn = false;
 
-// 🔊 Speak
+let model = null;
+let detecting = false;
+
+// 🔊 Speak (no overlap)
 function speak(text) {
     const msg = new SpeechSynthesisUtterance(text);
     speechSynthesis.cancel();
     speechSynthesis.speak(msg);
 }
 
-// 📷 Start Camera (BACK)
+// ==========================
+// 🤖 Load AI Model
+// ==========================
+async function loadModel() {
+    model = await cocoSsd.load();
+    console.log("AI Model Loaded");
+}
+
+// ==========================
+// 📷 Start Camera
+// ==========================
 async function startCamera() {
     if (cameraOn) return;
 
@@ -19,11 +32,13 @@ async function startCamera() {
             video: { facingMode: "environment" }
         });
 
-        document.getElementById("camera").srcObject = stream;
-        cameraOn = true;
+        const video = document.getElementById("camera");
+        video.srcObject = stream;
 
-        updateStatus("Camera started");
+        cameraOn = true;
         speak("Camera started");
+
+        startDetection();
 
     } catch {
         speak("Camera permission denied");
@@ -35,19 +50,54 @@ function stopCamera() {
     if (stream) {
         stream.getTracks().forEach(track => track.stop());
         cameraOn = false;
-
-        updateStatus("Camera stopped");
+        detecting = false;
         speak("Camera stopped");
     }
 }
 
-// 🧠 Update debug safely
-function updateStatus(text) {
-    const el = document.getElementById("statusText");
-    if (el) el.innerText = "Action: " + text;
+// ==========================
+// 🚧 Object Detection
+// ==========================
+async function startDetection() {
+    if (!model) await loadModel();
+
+    const video = document.getElementById("camera");
+    detecting = true;
+
+    setInterval(async () => {
+        if (!detecting || !cameraOn) return;
+
+        const predictions = await model.detect(video);
+
+        let foundObstacle = false;
+
+        predictions.forEach(p => {
+            const [x, y, width, height] = p.bbox;
+
+            // 🎯 Check if object is in center area
+            let centerX = x + width / 2;
+
+            let videoWidth = video.videoWidth;
+
+            if (
+                centerX > videoWidth * 0.3 &&
+                centerX < videoWidth * 0.7 &&
+                p.score > 0.6
+            ) {
+                foundObstacle = true;
+            }
+        });
+
+        if (foundObstacle) {
+            speak("Obstacle ahead");
+        }
+
+    }, 2000); // check every 2 seconds
 }
 
-// 🎤 Start Voice
+// ==========================
+// 🎤 Voice Control
+// ==========================
 function startVoice() {
     if (isListening) return;
 
@@ -61,70 +111,16 @@ function startVoice() {
             let transcript = last[0].transcript.toLowerCase().trim();
             let confidence = last[0].confidence;
 
-            // 📝 Always show text
             document.getElementById("heardText").innerText = "You said: " + transcript;
-            document.getElementById("confidenceText").innerText = "Confidence: " + confidence.toFixed(2);
 
             if (!last.isFinal) return;
-            if (confidence < 0.35 || transcript.length < 2) return;
-
-            console.log("Final:", transcript);
+            if (confidence < 0.2) return;
 
             speak("You said " + transcript);
 
-            // 🔥 BETTER COMMAND DETECTION
-
-            // START CAMERA
-            if (
-                transcript.includes("start camera") ||
-                transcript.includes("open camera") ||
-                transcript.includes("turn on camera") ||
-                (transcript.includes("camera") && transcript.includes("start"))
-            ) {
-                updateStatus("Starting Camera");
-                speak("Starting camera");
-                startCamera();
-            }
-
-            // STOP CAMERA (IMPROVED)
-            else if (
-                transcript.includes("stop camera") ||
-                transcript.includes("close camera") ||
-                transcript.includes("camera off") ||
-                transcript.includes("turn off camera") ||
-                transcript.includes("disable camera") ||
-                (transcript.includes("camera") && transcript.includes("stop"))
-            ) {
-                updateStatus("Stopping Camera");
-                speak("Stopping camera");
-                stopCamera();
-            }
-
-            // LOCATION
-            else if (
-                transcript.includes("location") ||
-                transcript.includes("where am i")
-            ) {
-                updateStatus("Getting Location");
-                speak("Getting location");
-                getLocation();
-            }
-
-            // STOP VOICE
-            else if (transcript.includes("stop")) {
-                updateStatus("Stopping Voice");
-                speak("Stopping voice");
-                stopVoiceSafe();
-            }
-
-            else {
-                updateStatus("Not recognized");
-                speak("Command not recognized");
-            }
-        };
-
-        recognition.onerror = function () {
-            stopVoiceSafe();
+            if (transcript.includes("start camera")) startCamera();
+            else if (transcript.includes("stop camera")) stopCamera();
+            else if (transcript.includes("location")) getLocation();
         };
 
         recognition.start();
@@ -147,31 +143,17 @@ function stopVoiceSafe() {
 // 📍 Location
 function getLocation() {
     navigator.geolocation.getCurrentPosition(pos => {
-        let lat = pos.coords.latitude;
-        let lon = pos.coords.longitude;
-        speak("Your location is latitude " + lat + " longitude " + lon);
-    }, () => {
-        speak("Location access denied");
+        speak("Your location is latitude " + pos.coords.latitude);
     });
 }
 
 // ==========================
-// TOUCH (Mobile)
+// TOUCH + MOUSE
 // ==========================
 document.body.addEventListener("touchstart", () => startVoice(), { passive: true });
 document.body.addEventListener("touchend", () => stopVoiceSafe());
-document.body.addEventListener("touchcancel", () => stopVoiceSafe());
-document.body.addEventListener("touchmove", () => stopVoiceSafe());
-
-// ==========================
-// MOUSE (Laptop)
-// ==========================
-document.body.addEventListener("mousedown", (e) => {
-    e.preventDefault();
-    startVoice();
-});
+document.body.addEventListener("mousedown", () => startVoice());
 document.body.addEventListener("mouseup", () => stopVoiceSafe());
-document.body.addEventListener("mouseleave", () => stopVoiceSafe());
 
 // ==========================
 // INIT
