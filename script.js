@@ -1,11 +1,12 @@
 let stream;
-let recognition;
+let recognition = null;
 let isListening = false;
 let cameraOn = false;
 
 // 🔊 Speak
 function speak(text) {
     const msg = new SpeechSynthesisUtterance(text);
+    speechSynthesis.cancel(); // stop overlapping speech
     speechSynthesis.speak(msg);
 }
 
@@ -32,43 +33,42 @@ function stopCamera() {
     }
 }
 
-// 🎤 Start Voice (FIXED)
+// 🎤 Start Voice (Hold)
 function startVoice() {
     if (isListening) return;
 
-    recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-    recognition.continuous = true;
-    recognition.interimResults = false;
+    try {
+        recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.continuous = true;
+        recognition.interimResults = false;
 
-    recognition.onresult = function (event) {
-        let command = event.results[event.results.length - 1][0].transcript.toLowerCase();
-        console.log("Command:", command);
+        recognition.onresult = function (event) {
+            let command = event.results[event.results.length - 1][0].transcript.toLowerCase();
+            console.log("Command:", command);
 
-        if (command.includes("start camera")) startCamera();
-        else if (command.includes("stop camera")) stopCamera();
-        else if (command.includes("location")) getLocation();
-        else if (command.includes("stop voice")) stopVoice();
-        else speak("Command not recognized");
-    };
+            if (command.includes("start camera")) startCamera();
+            else if (command.includes("stop camera")) stopCamera();
+            else if (command.includes("location")) getLocation();
+            else speak("Command not recognized");
+        };
 
-    // 🔥 IMPORTANT: auto-restart mic
-    recognition.onend = function () {
-        if (isListening) {
-            recognition.start();
-        }
-    };
+        recognition.onerror = function () {
+            stopVoice();
+        };
 
-    recognition.start();
-    isListening = true;
-    speak("Voice control started");
+        recognition.start();
+        isListening = true;
+    } catch {
+        speak("Microphone not supported");
+    }
 }
 
-// 🛑 Stop Voice
+// 🛑 Stop Voice (Release)
 function stopVoice() {
-    if (recognition) {
-        isListening = false;
+    if (recognition && isListening) {
         recognition.stop();
-        speak("Voice stopped");
+        recognition = null;
+        isListening = false;
     }
 }
 
@@ -83,12 +83,17 @@ function getLocation() {
     });
 }
 
-// 👆 TOUCH ANYWHERE (FIXED)
+// ✋ HOLD → mic ON
 document.body.addEventListener("touchstart", function () {
     startVoice();
 }, { passive: true });
 
+// 🖐️ RELEASE → mic OFF
+document.body.addEventListener("touchend", function () {
+    stopVoice();
+});
+
 // 🔊 Auto instruction
 window.onload = function () {
-    speak("Tap anywhere to start voice control");
+    speak("Hold anywhere and speak your command");
 };
