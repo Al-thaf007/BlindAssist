@@ -5,9 +5,17 @@ let cameraOn = false;
 
 let model = null;
 let detecting = false;
+let lastSpokenTime = 0;
 
 // 🔊 Speak (no overlap)
 function speak(text) {
+    const now = Date.now();
+
+    // ⏱️ prevent spam (3 sec cooldown)
+    if (now - lastSpokenTime < 3000) return;
+
+    lastSpokenTime = now;
+
     const msg = new SpeechSynthesisUtterance(text);
     speechSynthesis.cancel();
     speechSynthesis.speak(msg);
@@ -22,7 +30,7 @@ async function loadModel() {
 }
 
 // ==========================
-// 📷 Start Camera
+// 📷 Start Camera (BACK)
 // ==========================
 async function startCamera() {
     if (cameraOn) return;
@@ -36,6 +44,7 @@ async function startCamera() {
         video.srcObject = stream;
 
         cameraOn = true;
+        updateStatus("Camera started");
         speak("Camera started");
 
         startDetection();
@@ -51,12 +60,14 @@ function stopCamera() {
         stream.getTracks().forEach(track => track.stop());
         cameraOn = false;
         detecting = false;
+
+        updateStatus("Camera stopped");
         speak("Camera stopped");
     }
 }
 
 // ==========================
-// 🚧 Object Detection
+// 🚧 SMART DETECTION
 // ==========================
 async function startDetection() {
     if (!model) await loadModel();
@@ -74,29 +85,38 @@ async function startDetection() {
         predictions.forEach(p => {
             const [x, y, width, height] = p.bbox;
 
-            // 🎯 Check if object is in center area
             let centerX = x + width / 2;
-
             let videoWidth = video.videoWidth;
 
+            // 🎯 FRONT ZONE (middle 40%)
             if (
                 centerX > videoWidth * 0.3 &&
                 centerX < videoWidth * 0.7 &&
-                p.score > 0.6
+                p.score > 0.6 &&
+                width > videoWidth * 0.1 // ignore tiny objects
             ) {
                 foundObstacle = true;
             }
         });
 
         if (foundObstacle) {
+            updateStatus("Obstacle ahead");
             speak("Obstacle ahead");
         }
 
-    }, 2000); // check every 2 seconds
+    }, 2000); // every 2 sec
 }
 
 // ==========================
-// 🎤 Voice Control
+// 🧠 DEBUG STATUS
+// ==========================
+function updateStatus(text) {
+    const el = document.getElementById("statusText");
+    if (el) el.innerText = "Action: " + text;
+}
+
+// ==========================
+// 🎤 VOICE CONTROL
 // ==========================
 function startVoice() {
     if (isListening) return;
@@ -112,15 +132,46 @@ function startVoice() {
             let confidence = last[0].confidence;
 
             document.getElementById("heardText").innerText = "You said: " + transcript;
+            document.getElementById("confidenceText").innerText = "Confidence: " + confidence.toFixed(2);
 
             if (!last.isFinal) return;
             if (confidence < 0.2) return;
 
             speak("You said " + transcript);
 
-            if (transcript.includes("start camera")) startCamera();
-            else if (transcript.includes("stop camera")) stopCamera();
-            else if (transcript.includes("location")) getLocation();
+            // START CAMERA
+            if (
+                transcript.includes("start camera") ||
+                transcript.includes("open camera")
+            ) {
+                updateStatus("Starting Camera");
+                startCamera();
+            }
+
+            // STOP CAMERA
+            else if (
+                transcript.includes("stop camera") ||
+                transcript.includes("camera off") ||
+                transcript.includes("turn off camera")
+            ) {
+                updateStatus("Stopping Camera");
+                stopCamera();
+            }
+
+            // LOCATION
+            else if (transcript.includes("location")) {
+                updateStatus("Getting Location");
+                getLocation();
+            }
+
+            else {
+                updateStatus("Not recognized");
+                speak("Command not recognized");
+            }
+        };
+
+        recognition.onerror = function () {
+            stopVoiceSafe();
         };
 
         recognition.start();
@@ -152,8 +203,15 @@ function getLocation() {
 // ==========================
 document.body.addEventListener("touchstart", () => startVoice(), { passive: true });
 document.body.addEventListener("touchend", () => stopVoiceSafe());
-document.body.addEventListener("mousedown", () => startVoice());
+document.body.addEventListener("touchcancel", () => stopVoiceSafe());
+document.body.addEventListener("touchmove", () => stopVoiceSafe());
+
+document.body.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    startVoice();
+});
 document.body.addEventListener("mouseup", () => stopVoiceSafe());
+document.body.addEventListener("mouseleave", () => stopVoiceSafe());
 
 // ==========================
 // INIT
