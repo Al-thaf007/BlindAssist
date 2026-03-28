@@ -3,14 +3,14 @@ let recognition = null;
 let isListening = false;
 let cameraOn = false;
 
-// 🔊 Speak (no overlap)
+// 🔊 Speak
 function speak(text) {
     const msg = new SpeechSynthesisUtterance(text);
     speechSynthesis.cancel();
     speechSynthesis.speak(msg);
 }
 
-// 📷 Start Camera (BACK CAMERA)
+// 📷 Start Camera (BACK)
 async function startCamera() {
     if (cameraOn) return;
 
@@ -21,7 +21,10 @@ async function startCamera() {
 
         document.getElementById("camera").srcObject = stream;
         cameraOn = true;
+
+        updateStatus("Camera started");
         speak("Camera started");
+
     } catch {
         speak("Camera permission denied");
     }
@@ -32,8 +35,16 @@ function stopCamera() {
     if (stream) {
         stream.getTracks().forEach(track => track.stop());
         cameraOn = false;
+
+        updateStatus("Camera stopped");
         speak("Camera stopped");
     }
+}
+
+// 🧠 Update debug safely
+function updateStatus(text) {
+    const el = document.getElementById("statusText");
+    if (el) el.innerText = "Action: " + text;
 }
 
 // 🎤 Start Voice
@@ -50,36 +61,64 @@ function startVoice() {
             let transcript = last[0].transcript.toLowerCase().trim();
             let confidence = last[0].confidence;
 
+            // 📝 Always show text
             document.getElementById("heardText").innerText = "You said: " + transcript;
             document.getElementById("confidenceText").innerText = "Confidence: " + confidence.toFixed(2);
 
             if (!last.isFinal) return;
-            if (confidence < 0.4 || transcript.length < 2) return;
+            if (confidence < 0.35 || transcript.length < 2) return;
+
+            console.log("Final:", transcript);
 
             speak("You said " + transcript);
 
-            if (transcript.includes("camera") && transcript.includes("start")) {
-                document.getElementById("statusText").innerText = "Action: Starting Camera";
+            // 🔥 BETTER COMMAND DETECTION
+
+            // START CAMERA
+            if (
+                transcript.includes("start camera") ||
+                transcript.includes("open camera") ||
+                transcript.includes("turn on camera") ||
+                (transcript.includes("camera") && transcript.includes("start"))
+            ) {
+                updateStatus("Starting Camera");
                 speak("Starting camera");
                 startCamera();
             }
-            else if (transcript.includes("camera") && transcript.includes("stop")) {
-                document.getElementById("statusText").innerText = "Action: Stopping Camera";
+
+            // STOP CAMERA (IMPROVED)
+            else if (
+                transcript.includes("stop camera") ||
+                transcript.includes("close camera") ||
+                transcript.includes("camera off") ||
+                transcript.includes("turn off camera") ||
+                transcript.includes("disable camera") ||
+                (transcript.includes("camera") && transcript.includes("stop"))
+            ) {
+                updateStatus("Stopping Camera");
                 speak("Stopping camera");
                 stopCamera();
             }
-            else if (transcript.includes("location")) {
-                document.getElementById("statusText").innerText = "Action: Getting Location";
+
+            // LOCATION
+            else if (
+                transcript.includes("location") ||
+                transcript.includes("where am i")
+            ) {
+                updateStatus("Getting Location");
                 speak("Getting location");
                 getLocation();
             }
+
+            // STOP VOICE
             else if (transcript.includes("stop")) {
-                document.getElementById("statusText").innerText = "Action: Stopping Voice";
+                updateStatus("Stopping Voice");
                 speak("Stopping voice");
                 stopVoiceSafe();
             }
+
             else {
-                document.getElementById("statusText").innerText = "Action: Not recognized";
+                updateStatus("Not recognized");
                 speak("Command not recognized");
             }
         };
@@ -99,12 +138,9 @@ function startVoice() {
 // 🛑 Stop Voice
 function stopVoiceSafe() {
     if (recognition) {
-        try {
-            recognition.stop();
-        } catch { }
+        try { recognition.stop(); } catch { }
         recognition = null;
     }
-
     isListening = false;
 }
 
@@ -120,7 +156,7 @@ function getLocation() {
 }
 
 // ==========================
-// ✋ TOUCH CONTROLS (Mobile)
+// TOUCH (Mobile)
 // ==========================
 document.body.addEventListener("touchstart", () => startVoice(), { passive: true });
 document.body.addEventListener("touchend", () => stopVoiceSafe());
@@ -128,24 +164,18 @@ document.body.addEventListener("touchcancel", () => stopVoiceSafe());
 document.body.addEventListener("touchmove", () => stopVoiceSafe());
 
 // ==========================
-// 🖱️ MOUSE CONTROLS (Laptop)
+// MOUSE (Laptop)
 // ==========================
 document.body.addEventListener("mousedown", (e) => {
-    e.preventDefault(); // prevent text selection
+    e.preventDefault();
     startVoice();
 });
-
-document.body.addEventListener("mouseup", () => {
-    stopVoiceSafe();
-});
-
-document.body.addEventListener("mouseleave", () => {
-    stopVoiceSafe();
-});
+document.body.addEventListener("mouseup", () => stopVoiceSafe());
+document.body.addEventListener("mouseleave", () => stopVoiceSafe());
 
 // ==========================
-// 🔊 Auto Instruction
+// INIT
 // ==========================
 window.onload = function () {
-    speak("Hold screen or mouse and speak your command");
+    speak("Hold and speak your command");
 };
