@@ -1,187 +1,83 @@
-// =====================
-// GLOBAL VARIABLES
-// =====================
-let model = null;
-let detecting = false;
-let lastSpoken = "";
-let stream = null;
-let recognition = null;
+let stream;
+let recognition;
+let isListening = false;
+let cameraOn = false;
 
-// =====================
-// LOAD AI MODEL
-// =====================
-async function loadModel() {
+// 🔊 Speak
+function speak(text) {
+    const msg = new SpeechSynthesisUtterance(text);
+    speechSynthesis.speak(msg);
+}
+
+// 📷 Camera
+async function startCamera() {
+    if (cameraOn) return;
+
     try {
-        model = await cocoSsd.load();
-        console.log("AI loaded");
-        speak("AI ready");
-    } catch (err) {
-        console.log(err);
-        alert("AI failed to load");
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        document.getElementById("camera").srcObject = stream;
+        cameraOn = true;
+        speak("Camera started");
+    } catch {
+        speak("Camera permission denied");
     }
 }
 
-// =====================
-// START CAMERA
-// =====================
-function startCamera() {
-    const video = document.getElementById("camera");
-
-    navigator.mediaDevices.getUserMedia({ video: true })
-        .then(function (s) {
-            stream = s;
-            video.srcObject = stream;
-            video.play();
-
-            speak("Camera started");
-
-            loadModel().then(() => {
-                startDetection(video);
-            });
-        })
-        .catch(function (err) {
-            console.log(err);
-            alert("Camera not working");
-        });
-}
-
-// =====================
-// STOP CAMERA
-// =====================
 function stopCamera() {
     if (stream) {
         stream.getTracks().forEach(track => track.stop());
-        document.getElementById("camera").srcObject = null;
-        stream = null;
+        cameraOn = false;
         speak("Camera stopped");
     }
 }
 
-// =====================
-// DETECTION LOOP
-// =====================
-function startDetection(video) {
-    if (detecting) return;
-    detecting = true;
+// 🎤 Voice
+function startVoice() {
+    if (isListening) return;
 
-    setInterval(async () => {
-        if (!model) return;
+    try {
+        recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.continuous = true;
 
-        const predictions = await model.detect(video);
+        recognition.onresult = function (event) {
+            let command = event.results[event.results.length - 1][0].transcript.toLowerCase();
+            console.log(command);
 
-        let obstacleDetected = false;
-        let veryClose = false;
+            if (command.includes("start camera")) startCamera();
+            else if (command.includes("stop camera")) stopCamera();
+            else if (command.includes("location")) getLocation();
+            else if (command.includes("stop voice")) stopVoice();
+            else speak("Command not recognized");
+        };
 
-        predictions.forEach(pred => {
-            if (pred.score > 0.6) {
-                let [x, y, width, height] = pred.bbox;
-                let area = width * height;
-
-                if (area > 150000) {
-                    veryClose = true;
-                } else if (area > 50000) {
-                    obstacleDetected = true;
-                }
-            }
-        });
-
-        let message = "";
-
-        if (veryClose) {
-            message = "Stop, obstacle very close";
-        } else if (obstacleDetected) {
-            message = "Obstacle ahead";
-        }
-
-        if (message && message !== lastSpoken) {
-            speak(message);
-            console.log(message);
-            lastSpoken = message;
-        }
-
-    }, 1500);
-}
-
-// =====================
-// GPS LOCATION
-// =====================
-function getLocation() {
-    navigator.geolocation.getCurrentPosition(
-        pos => {
-            let lat = pos.coords.latitude;
-            let lon = pos.coords.longitude;
-
-            document.getElementById("location").innerText =
-                "Lat: " + lat + " | Long: " + lon;
-
-            speak("Location fetched");
-        },
-        () => {
-            alert("Location permission denied");
-        }
-    );
-}
-
-// =====================
-// VOICE COMMAND AUTO START
-// =====================
-document.body.addEventListener("click", () => {
-    startListening();
-}, { once: true });
-
-// =====================
-// VOICE COMMAND
-// =====================
-function startListening() {
-    if (recognition) {
-        recognition.stop();
-        recognition = null;
+        recognition.start();
+        isListening = true;
+        speak("Voice control started");
+    } catch {
+        speak("Microphone not supported");
     }
-
-    recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-
-    recognition.continuous = true;
-    recognition.lang = "en-US";
-
-    recognition.start();
-
-    recognition.onresult = function (event) {
-        let text = event.results[event.results.length - 1][0].transcript.toLowerCase();
-        console.log("Heard:", text);
-
-        if (text.includes("start") && text.includes("camera")) {
-            startCamera();
-        }
-
-        if (text.includes("stop") && text.includes("camera")) {
-            stopCamera();
-        }
-
-        if (text.includes("location")) {
-            getLocation();
-        }
-
-        if (text.includes("stop voice")) {
-            stopListening();
-        }
-    };
 }
 
-// =====================
-// STOP VOICE
-// =====================
-function stopListening() {
+function stopVoice() {
     if (recognition) {
         recognition.stop();
-        recognition = null;
+        isListening = false;
         speak("Voice stopped");
     }
 }
 
-// =====================
-// SPEAK FUNCTION
-// =====================
-function speak(text) {
-    let speech = new SpeechSynthesisUtterance(text);
-    window.speechSynthesis.speak(speech);
+// 📍 Location
+function getLocation() {
+    navigator.geolocation.getCurrentPosition(pos => {
+        let lat = pos.coords.latitude;
+        let lon = pos.coords.longitude;
+        speak("Your location is latitude " + lat + " longitude " + lon);
+    }, () => {
+        speak("Location access denied");
+    });
 }
+
+// 👆 TAP ANYWHERE → START MIC
+document.body.addEventListener("click", function () {
+    startVoice();
+});
