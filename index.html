@@ -1,26 +1,24 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 
 <head>
-    <title>Blind Assist App</title>
+    <title>Blind Assist</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- CSS -->
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <h1>Blind Assist Interface</h1>
+    <video id="camera" autoplay playsinline></video>
 
-    <button onclick="startCamera()">Start Camera</button>
-    <button onclick="stopCamera()">Stop Camera</button>
-    <button onclick="getLocation()">Get Location</button>
+    <div class="overlay">
+        Tap anywhere to start voice control
+    </div>
 
-    <video id="camera" autoplay playsinline muted></video>
-
-    <p id="location"></p>
-
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
-    <script src="./script.js"></script>
+    <!-- JS -->
+    <script src="script.js"></script>
 
 </body>
 
