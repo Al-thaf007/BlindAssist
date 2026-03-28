@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" href="style.css">
+    <title>Blind Assist App</title>
+</head>
+
+<body>
+
+    <h2>Blind Assist</h2>
+
+    <!-- Camera -->
+    <video id="camera" width="300" autoplay playsinline></video>
+
+    <!-- Location -->
+    <p id="location">Location: Not fetched</p>
+
+    <!-- Buttons -->
+    <button onclick="startListening()">🎤 Start Voice</button>
+    <button onclick="stopListening()">🛑 Stop Voice</button>
+    <button onclick="startCamera()">📷 Start Camera</button>
+    <button onclick="stopCamera()">❌ Stop Camera</button>
+    <button onclick="getLocation()">📍 Get Location</button>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+    <script src="script.js"></script>
+
+</body>
+
+</html>

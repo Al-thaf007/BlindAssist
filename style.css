@@ -1,0 +1,67 @@
+/* =====================
+   GLOBAL STYLING
+===================== */
+body {
+    text-align: center;
+    font-family: Arial, sans-serif;
+    background: black;
+    color: white;
+    margin: 0;
+    padding: 20px;
+}
+
+/* =====================
+   TITLE
+===================== */
+h1 {
+    font-size: 28px;
+    margin-bottom: 20px;
+}
+
+/* =====================
+   BUTTONS (BIG & CLEAR)
+===================== */
+button {
+    display: block;
+    width: 90%;
+    max-width: 300px;
+    margin: 12px auto;
+    padding: 18px;
+    /* bigger touch area */
+    font-size: 20px;
+    /* easier to see */
+    font-weight: bold;
+    border: none;
+    border-radius: 12px;
+    background: #00c853;
+    color: white;
+}
+
+/* Button click effect */
+button:active {
+    background: #009624;
+}
+
+/* Optional: focus (keyboard / accessibility) */
+button:focus {
+    outline: 3px solid yellow;
+}
+
+/* =====================
+   VIDEO (CAMERA)
+===================== */
+video {
+    width: 100%;
+    max-width: 500px;
+    margin-top: 20px;
+    border-radius: 12px;
+}
+
+/* =====================
+   LOCATION TEXT
+===================== */
+#location {
+    margin-top: 20px;
+    font-size: 18px;
+    /* slightly bigger */
+}
