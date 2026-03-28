@@ -16,9 +16,7 @@ async function startCamera() {
 
     try {
         stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: "environment"
-            }
+            video: { facingMode: "environment" }
         });
 
         document.getElementById("camera").srcObject = stream;
@@ -48,23 +46,33 @@ function startVoice() {
         recognition.interimResults = false;
 
         recognition.onresult = function (event) {
-            let command = event.results[event.results.length - 1][0].transcript.toLowerCase();
-            console.log("Command:", command);
+            let result = event.results[event.results.length - 1][0];
+            let command = result.transcript.toLowerCase().trim();
+            let confidence = result.confidence;
 
-            if (command.includes("start camera")) startCamera();
-            else if (command.includes("stop camera")) stopCamera();
-            else if (command.includes("location")) getLocation();
-            else if (command.includes("stop voice")) stopVoiceSafe();
-            else speak("Command not recognized");
+            console.log("Heard:", command, "Confidence:", confidence);
+
+            // ❗ Ignore weak/noisy input
+            if (confidence < 0.5 || command.length < 3) return;
+
+            // 🔥 Flexible matching
+            if (command.includes("camera") && command.includes("start")) {
+                startCamera();
+            }
+            else if (command.includes("camera") && command.includes("stop")) {
+                stopCamera();
+            }
+            else if (command.includes("location")) {
+                getLocation();
+            }
+            else if (command.includes("stop")) {
+                stopVoiceSafe();
+            }
+            // ❌ removed annoying "not recognized"
         };
 
         recognition.onerror = function () {
             stopVoiceSafe();
-        };
-
-        recognition.onend = function () {
-            // prevent auto restart after release
-            if (!isListening) return;
         };
 
         recognition.start();
@@ -80,9 +88,8 @@ function startVoice() {
 function stopVoiceSafe() {
     if (recognition) {
         try {
-            recognition.onend = null;
             recognition.stop();
-        } catch (e) { }
+        } catch { }
         recognition = null;
     }
 
@@ -120,7 +127,7 @@ document.body.addEventListener("touchcancel", function () {
     stopVoiceSafe();
 });
 
-// MOVE → mic OFF (prevents stuck)
+// MOVE → mic OFF
 document.body.addEventListener("touchmove", function () {
     stopVoiceSafe();
 });
@@ -129,5 +136,5 @@ document.body.addEventListener("touchmove", function () {
 // 🔊 Auto Instruction
 // ==========================
 window.onload = function () {
-    speak("Hold anywhere and speak your command");
+    speak("Hold and speak. Say start camera or location");
 };
