@@ -36,7 +36,7 @@ function stopCamera() {
     }
 }
 
-// 🎤 Start Voice (Hold)
+// 🎤 Start Voice
 function startVoice() {
     if (isListening) return;
 
@@ -50,21 +50,14 @@ function startVoice() {
             let transcript = last[0].transcript.toLowerCase().trim();
             let confidence = last[0].confidence;
 
-            // 📝 Show text
             document.getElementById("heardText").innerText = "You said: " + transcript;
             document.getElementById("confidenceText").innerText = "Confidence: " + confidence.toFixed(2);
 
-            // Only act on final result
             if (!last.isFinal) return;
-
             if (confidence < 0.4 || transcript.length < 2) return;
 
-            console.log("Final:", transcript);
-
-            // 🔊 Speak what it heard
             speak("You said " + transcript);
 
-            // 🤖 Command detection
             if (transcript.includes("camera") && transcript.includes("start")) {
                 document.getElementById("statusText").innerText = "Action: Starting Camera";
                 speak("Starting camera");
@@ -127,22 +120,26 @@ function getLocation() {
 }
 
 // ==========================
-// ✋ TOUCH CONTROLS
+// ✋ TOUCH CONTROLS (Mobile)
 // ==========================
+document.body.addEventListener("touchstart", () => startVoice(), { passive: true });
+document.body.addEventListener("touchend", () => stopVoiceSafe());
+document.body.addEventListener("touchcancel", () => stopVoiceSafe());
+document.body.addEventListener("touchmove", () => stopVoiceSafe());
 
-document.body.addEventListener("touchstart", function () {
+// ==========================
+// 🖱️ MOUSE CONTROLS (Laptop)
+// ==========================
+document.body.addEventListener("mousedown", (e) => {
+    e.preventDefault(); // prevent text selection
     startVoice();
-}, { passive: true });
+});
 
-document.body.addEventListener("touchend", function () {
+document.body.addEventListener("mouseup", () => {
     stopVoiceSafe();
 });
 
-document.body.addEventListener("touchcancel", function () {
-    stopVoiceSafe();
-});
-
-document.body.addEventListener("touchmove", function () {
+document.body.addEventListener("mouseleave", () => {
     stopVoiceSafe();
 });
 
@@ -150,5 +147,5 @@ document.body.addEventListener("touchmove", function () {
 // 🔊 Auto Instruction
 // ==========================
 window.onload = function () {
-    speak("Hold and speak your command");
+    speak("Hold screen or mouse and speak your command");
 };
