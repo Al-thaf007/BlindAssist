@@ -5,7 +5,6 @@ let cameraOn = false;
 
 let model = null;
 let detecting = false;
-let userInteracted = false;
 
 // 🔊 Speak
 function speak(text) {
@@ -35,7 +34,6 @@ async function loadModel() {
         speak("Detection ready");
 
     } catch (e) {
-        console.error(e);
         updateStatus("Model failed");
         speak("Model failed");
     }
@@ -63,9 +61,8 @@ async function startCamera() {
 
         if (model) startDetection();
 
-    } catch (err) {
-        console.error(err);
-        speak("Camera blocked. Tap screen first");
+    } catch {
+        speak("Camera blocked");
     }
 }
 
@@ -73,14 +70,17 @@ async function startCamera() {
 // 🛑 Stop Camera
 // ==========================
 function stopCamera() {
+    if (!cameraOn) return;
+
     if (stream) {
         stream.getTracks().forEach(track => track.stop());
-        cameraOn = false;
-        detecting = false;
-
-        updateStatus("Camera stopped");
-        speak("Camera stopped");
     }
+
+    cameraOn = false;
+    detecting = false;
+
+    updateStatus("Camera stopped");
+    speak("Camera stopped");
 }
 
 // ==========================
@@ -124,7 +124,7 @@ function startDetection() {
 }
 
 // ==========================
-// 🎤 Voice
+// 🎤 Voice (IMPROVED)
 // ==========================
 function startVoice() {
     if (isListening) return;
@@ -140,11 +140,35 @@ function startVoice() {
 
             speak("You said " + text);
 
-            if (text.includes("start camera")) {
-                if (!cameraOn) startCamera();
+            // 🔥 START CAMERA
+            if (
+                text.includes("start camera") ||
+                text.includes("open camera") ||
+                text.includes("turn on camera")
+            ) {
+                startCamera();
             }
 
-            else if (text.includes("stop camera")) stopCamera();
+            // 🔥 STOP CAMERA (FIXED)
+            else if (
+                text.includes("stop camera") ||
+                text.includes("camera off") ||
+                text.includes("turn off camera") ||
+                text.includes("close camera") ||
+                (text.includes("camera") && text.includes("stop"))
+            ) {
+                stopCamera();
+            }
+
+            // LOCATION
+            else if (text.includes("location")) {
+                getLocation();
+            }
+
+            else {
+                updateStatus("Not recognized");
+                speak("Command not recognized");
+            }
         };
 
         recognition.start();
@@ -167,28 +191,26 @@ function stopVoiceSafe() {
 }
 
 // ==========================
+// 📍 Location
+// ==========================
+function getLocation() {
+    navigator.geolocation.getCurrentPosition(pos => {
+        speak("Latitude " + pos.coords.latitude);
+    });
+}
+
+// ==========================
 // TOUCH + MOUSE
 // ==========================
 document.body.addEventListener("touchstart", () => {
-    userInteracted = true;
-
-    // 🔥 FIRST TOUCH → FORCE CAMERA PERMISSION
-    if (!cameraOn) {
-        startCamera();
-    }
-
+    if (!cameraOn) startCamera();
     startVoice();
 }, { passive: true });
 
 document.body.addEventListener("touchend", () => stopVoiceSafe());
 
 document.body.addEventListener("mousedown", () => {
-    userInteracted = true;
-
-    if (!cameraOn) {
-        startCamera();
-    }
-
+    if (!cameraOn) startCamera();
     startVoice();
 });
 
@@ -198,6 +220,6 @@ document.body.addEventListener("mouseup", () => stopVoiceSafe());
 // INIT
 // ==========================
 window.onload = function () {
-    speak("Hold screen and speak");
+    speak("Hold and speak");
     loadModel();
 };
