@@ -6,22 +6,30 @@ let cameraOn = false;
 let model = null;
 let detecting = false;
 
-let lastSpokenTime = 0;
+let isSpeaking = false;
 let cameraStartedByTouch = false;
 
-// 🔊 Speak (cooldown)
-function speak(text) {
-    const now = Date.now();
-    if (now - lastSpokenTime < 2000) return;
-
-    lastSpokenTime = now;
+// ==========================
+// 🔊 SPEAK (FINAL FIX)
+// ==========================
+function speak(text, force = false) {
+    if (!force && isSpeaking) return;
 
     const msg = new SpeechSynthesisUtterance(text);
+
+    isSpeaking = true;
+
+    msg.onend = () => {
+        isSpeaking = false;
+    };
+
     speechSynthesis.cancel();
     speechSynthesis.speak(msg);
 }
 
-// 🧠 Debug
+// ==========================
+// 🧠 DEBUG
+// ==========================
 function updateStatus(text) {
     console.log("STATUS:", text);
     const el = document.getElementById("statusText");
@@ -61,17 +69,17 @@ async function startCamera() {
         });
 
         video.srcObject = stream;
-        video.play(); // 🔥 no await here (important for mobile)
+        video.play();
 
         cameraOn = true;
         updateStatus("Camera started");
-        speak("Camera started");
+        speak("Camera started", true);
 
         if (model) startDetection();
 
     } catch (err) {
         console.error(err);
-        speak("Camera permission denied");
+        speak("Camera permission denied", true);
     }
 }
 
@@ -89,7 +97,7 @@ function stopCamera() {
     detecting = false;
 
     updateStatus("Camera stopped");
-    speak("Camera stopped");
+    speak("Camera stopped", true);
 }
 
 // ==========================
@@ -131,7 +139,6 @@ function startDetection() {
 
         let detectedState = foundObstacle ? "obstacle" : "clear";
 
-        // stability
         if (detectedState === lastDetectedState) {
             stableCount++;
         } else {
@@ -166,34 +173,46 @@ function startVoice() {
         recognition.continuous = true;
 
         recognition.onresult = function (event) {
-            let text = event.results[event.results.length - 1][0].transcript.toLowerCase();
+            let result = event.results[event.results.length - 1];
+            let text = result[0].transcript.toLowerCase().trim();
 
             document.getElementById("heardText").innerText = "You said: " + text;
 
-            speak("You said " + text);
+            if (!result.isFinal) return;
 
-            if (text.includes("start camera") || text.includes("open camera")) {
-                startCamera();
-            }
+            console.log("Final:", text);
 
-            else if (text.includes("stop camera") || text.includes("camera off")) {
+            // 🔥 STOP CAMERA FIRST
+            if (
+                text.includes("stop camera") ||
+                text.includes("camera off") ||
+                text.includes("turn off camera")
+            ) {
                 stopCamera();
+                return;
             }
 
-            else if (text.includes("location")) {
+            if (text.includes("location")) {
                 getLocation();
+                return;
             }
 
-            else {
-                updateStatus("Listening");
+            if (
+                text.includes("start camera") ||
+                text.includes("open camera")
+            ) {
+                startCamera();
+                return;
             }
+
+            updateStatus("Listening");
         };
 
         recognition.start();
         isListening = true;
 
     } catch {
-        speak("Microphone not supported");
+        speak("Microphone not supported", true);
     }
 }
 
@@ -218,37 +237,42 @@ function getLocation() {
 
         updateStatus("Location fetched");
 
-        speak("Your location is latitude " + lat + " and longitude " + lon);
+        speak("Your location is latitude " + lat + " and longitude " + lon, true);
     }, () => {
-        speak("Location access denied");
+        speak("Location access denied", true);
     });
 }
 
 // ==========================
-// 📱 TOUCH (FIXED)
+// 📱 TOUCH (FINAL FIX)
 // ==========================
 document.body.addEventListener("touchstart", function () {
     if (!cameraStartedByTouch) {
-        startCamera(); // 🔥 direct (no await)
+        startCamera();
         cameraStartedByTouch = true;
     }
-
     startVoice();
 }, { passive: true });
 
-document.body.addEventListener("touchend", () => stopVoiceSafe());
+document.body.addEventListener("touchend", function () {
+    setTimeout(() => {
+        stopVoiceSafe();
+    }, 700);
+});
 
 // ==========================
 // 💻 MOUSE
 // ==========================
 document.body.addEventListener("mousedown", function () {
-    if (!cameraOn) {
-        startCamera();
-    }
+    if (!cameraOn) startCamera();
     startVoice();
 });
 
-document.body.addEventListener("mouseup", () => stopVoiceSafe());
+document.body.addEventListener("mouseup", function () {
+    setTimeout(() => {
+        stopVoiceSafe();
+    }, 700);
+});
 
 // ==========================
 // INIT
