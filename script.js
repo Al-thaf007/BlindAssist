@@ -10,7 +10,7 @@ let isSpeaking = false;
 let cameraStartedByTouch = false;
 
 // ==========================
-// 🔊 SPEAK (FINAL FIX)
+// 🔊 SPEAK (FINAL)
 // ==========================
 function speak(text, force = false) {
     if (!force && isSpeaking) return;
@@ -58,16 +58,15 @@ async function loadModel() {
 // ==========================
 // 📷 START CAMERA
 // ==========================
-async function startCamera() {
+function startCamera() {
     if (cameraOn) return;
 
-    try {
-        const video = document.getElementById("camera");
+    const video = document.getElementById("camera");
 
-        stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "environment" }
-        });
-
+    navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }
+    }).then(s => {
+        stream = s;
         video.srcObject = stream;
         video.play();
 
@@ -77,10 +76,10 @@ async function startCamera() {
 
         if (model) startDetection();
 
-    } catch (err) {
+    }).catch(err => {
         console.error(err);
         speak("Camera permission denied", true);
-    }
+    });
 }
 
 // ==========================
@@ -163,7 +162,7 @@ function startDetection() {
 }
 
 // ==========================
-// 🎤 VOICE
+// 🎤 VOICE (FINAL FIX)
 // ==========================
 function startVoice() {
     if (isListening) return;
@@ -182,30 +181,41 @@ function startVoice() {
 
             console.log("Final:", text);
 
-            // 🔥 STOP CAMERA FIRST
+            text = text.replace(/\s+/g, " ");
+
+            // 🔥 STOP CAMERA
             if (
-                text.includes("stop camera") ||
+                (text.includes("stop") && text.includes("camera")) ||
                 text.includes("camera off") ||
-                text.includes("turn off camera")
+                text.includes("turn off")
             ) {
+                updateStatus("Stopping camera");
                 stopCamera();
                 return;
             }
 
-            if (text.includes("location")) {
+            // 🔥 LOCATION
+            if (
+                text.includes("location") ||
+                text.includes("where am i") ||
+                text.includes("my location")
+            ) {
+                updateStatus("Getting location");
                 getLocation();
                 return;
             }
 
+            // 🔥 START CAMERA
             if (
-                text.includes("start camera") ||
+                (text.includes("start") && text.includes("camera")) ||
                 text.includes("open camera")
             ) {
+                updateStatus("Starting camera");
                 startCamera();
                 return;
             }
 
-            updateStatus("Listening");
+            updateStatus("Command not clear");
         };
 
         recognition.start();
@@ -228,7 +238,7 @@ function stopVoiceSafe() {
 }
 
 // ==========================
-// 📍 LOCATION
+// 📍 LOCATION (FINAL FIX)
 // ==========================
 function getLocation() {
     navigator.geolocation.getCurrentPosition(pos => {
@@ -237,7 +247,10 @@ function getLocation() {
 
         updateStatus("Location fetched");
 
-        speak("Your location is latitude " + lat + " and longitude " + lon, true);
+        setTimeout(() => {
+            speak("Your location is latitude " + lat + " and longitude " + lon, true);
+        }, 200);
+
     }, () => {
         speak("Location access denied", true);
     });
