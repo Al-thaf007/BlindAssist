@@ -6,17 +6,8 @@ let cameraOn = false;
 let model = null;
 let detecting = false;
 
-let lastState = "";
-let lastSpokenTime = 0;
-let cameraInitialized = false; // 🔥 important
-
 // 🔊 Speak
 function speak(text) {
-    const now = Date.now();
-    if (now - lastSpokenTime < 2000) return;
-
-    lastSpokenTime = now;
-
     const msg = new SpeechSynthesisUtterance(text);
     speechSynthesis.cancel();
     speechSynthesis.speak(msg);
@@ -25,11 +16,12 @@ function speak(text) {
 // 🧠 Debug
 function updateStatus(text) {
     console.log("STATUS:", text);
-    document.getElementById("statusText").innerText = "Action: " + text;
+    const el = document.getElementById("statusText");
+    if (el) el.innerText = "Action: " + text;
 }
 
 // ==========================
-// 🤖 Load Model
+// 🤖 LOAD MODEL
 // ==========================
 async function loadModel() {
     try {
@@ -41,16 +33,17 @@ async function loadModel() {
         updateStatus("Detection ready");
         speak("Detection ready");
 
-    } catch {
+    } catch (e) {
+        updateStatus("Model failed");
         speak("Model failed");
     }
 }
 
 // ==========================
-// 📷 Start Camera (FIXED FOR MOBILE)
+// 📷 Start Camera
 // ==========================
-async function startCameraDirect() {
-    if (cameraInitialized) return;
+async function startCamera() {
+    if (cameraOn) return;
 
     try {
         const video = document.getElementById("camera");
@@ -63,16 +56,13 @@ async function startCameraDirect() {
         await video.play();
 
         cameraOn = true;
-        cameraInitialized = true;
-
-        updateStatus("Camera ready");
-        speak("Camera ready");
+        updateStatus("Camera started");
+        speak("Camera started");
 
         if (model) startDetection();
 
-    } catch (err) {
-        console.error(err);
-        speak("Camera permission denied");
+    } catch {
+        speak("Camera blocked");
     }
 }
 
@@ -80,20 +70,21 @@ async function startCameraDirect() {
 // 🛑 Stop Camera
 // ==========================
 function stopCamera() {
+    if (!cameraOn) return;
+
     if (stream) {
         stream.getTracks().forEach(track => track.stop());
     }
 
     cameraOn = false;
     detecting = false;
-    cameraInitialized = false;
 
     updateStatus("Camera stopped");
     speak("Camera stopped");
 }
 
 // ==========================
-// 🚧 Detection (40cm approx)
+// 🚧 Detection
 // ==========================
 function startDetection() {
     if (!model) return;
@@ -108,43 +99,32 @@ function startDetection() {
 
         const predictions = await model.detect(video);
 
-        let foundObstacle = false;
+        let found = false;
 
         predictions.forEach(p => {
             const [x, y, w, h] = p.bbox;
-
             let centerX = x + w / 2;
             let vw = video.videoWidth;
 
-            // 🎯 center zone
-            let inCenter =
+            if (
                 centerX > vw * 0.3 &&
-                centerX < vw * 0.7;
-
-            // 🔥 simulate ~40cm (big object = near)
-            let isNear = w > vw * 0.4;
-
-            if ((inCenter && p.score > 0.5) || isNear) {
-                foundObstacle = true;
+                centerX < vw * 0.7 &&
+                p.score > 0.5
+            ) {
+                found = true;
             }
         });
 
-        if (foundObstacle && lastState !== "obstacle") {
-            lastState = "obstacle";
+        if (found) {
             updateStatus("Obstacle ahead");
             speak("Obstacle ahead");
         }
-        else if (!foundObstacle && lastState !== "clear") {
-            lastState = "clear";
-            updateStatus("Path clear");
-            speak("Path clear");
-        }
 
-    }, 1200);
+    }, 2000);
 }
 
 // ==========================
-// 🎤 Voice
+// 🎤 Voice (IMPROVED)
 // ==========================
 function startVoice() {
     if (isListening) return;
@@ -160,15 +140,34 @@ function startVoice() {
 
             speak("You said " + text);
 
+            // 🔥 START CAMERA
             if (
-                text.includes("stop camera") ||
-                text.includes("camera off")
-            ) stopCamera();
+                text.includes("start camera") ||
+                text.includes("open camera") ||
+                text.includes("turn on camera")
+            ) {
+                startCamera();
+            }
 
-            else if (text.includes("location")) getLocation();
+            // 🔥 STOP CAMERA (FIXED)
+            else if (
+                text.includes("stop camera") ||
+                text.includes("camera off") ||
+                text.includes("turn off camera") ||
+                text.includes("close camera") ||
+                (text.includes("camera") && text.includes("stop"))
+            ) {
+                stopCamera();
+            }
+
+            // LOCATION
+            else if (text.includes("location")) {
+                getLocation();
+            }
 
             else {
-                updateStatus("Listening");
+                updateStatus("Not recognized");
+                speak("Command not recognized");
             }
         };
 
@@ -201,20 +200,17 @@ function getLocation() {
 }
 
 // ==========================
-// TOUCH (🔥 CRITICAL FIX)
+// TOUCH + MOUSE
 // ==========================
 document.body.addEventListener("touchstart", () => {
-    startCameraDirect(); // 🔥 MUST be first
+    if (!cameraOn) startCamera();
     startVoice();
 }, { passive: true });
 
 document.body.addEventListener("touchend", () => stopVoiceSafe());
 
-// ==========================
-// MOUSE (Laptop)
-// ==========================
 document.body.addEventListener("mousedown", () => {
-    startCameraDirect();
+    if (!cameraOn) startCamera();
     startVoice();
 });
 
@@ -224,6 +220,6 @@ document.body.addEventListener("mouseup", () => stopVoiceSafe());
 // INIT
 // ==========================
 window.onload = function () {
-    speak("Touch and hold to use");
+    speak("Hold and speak");
     loadModel();
 };
