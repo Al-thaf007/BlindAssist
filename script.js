@@ -7,6 +7,7 @@ let model = null;
 let detecting = false;
 
 let lastSpokenTime = 0;
+let cameraStartedByTouch = false;
 
 // 🔊 Speak (cooldown)
 function speak(text) {
@@ -60,7 +61,7 @@ async function startCamera() {
         });
 
         video.srcObject = stream;
-        await video.play();
+        video.play(); // 🔥 no await here (important for mobile)
 
         cameraOn = true;
         updateStatus("Camera started");
@@ -68,7 +69,8 @@ async function startCamera() {
 
         if (model) startDetection();
 
-    } catch {
+    } catch (err) {
+        console.error(err);
         speak("Camera permission denied");
     }
 }
@@ -119,7 +121,6 @@ function startDetection() {
             let centerX = x + w / 2;
             let sizeRatio = w / vw;
 
-            // 🎯 center OR near object
             if (
                 (centerX > vw * 0.3 && centerX < vw * 0.7 && p.score > 0.5)
                 || sizeRatio > 0.4
@@ -130,7 +131,7 @@ function startDetection() {
 
         let detectedState = foundObstacle ? "obstacle" : "clear";
 
-        // 🔥 stability check
+        // stability
         if (detectedState === lastDetectedState) {
             stableCount++;
         } else {
@@ -171,17 +172,11 @@ function startVoice() {
 
             speak("You said " + text);
 
-            if (
-                text.includes("start camera") ||
-                text.includes("open camera")
-            ) {
+            if (text.includes("start camera") || text.includes("open camera")) {
                 startCamera();
             }
 
-            else if (
-                text.includes("stop camera") ||
-                text.includes("camera off")
-            ) {
+            else if (text.includes("stop camera") || text.includes("camera off")) {
                 stopCamera();
             }
 
@@ -214,7 +209,7 @@ function stopVoiceSafe() {
 }
 
 // ==========================
-// 📍 LOCATION (LAT + LON)
+// 📍 LOCATION
 // ==========================
 function getLocation() {
     navigator.geolocation.getCurrentPosition(pos => {
@@ -230,23 +225,25 @@ function getLocation() {
 }
 
 // ==========================
-// TOUCH (MOBILE FIX)
+// 📱 TOUCH (FIXED)
 // ==========================
-document.body.addEventListener("touchstart", async () => {
-    if (!cameraOn) {
-        await startCamera(); // 🔥 required for mobile
+document.body.addEventListener("touchstart", function () {
+    if (!cameraStartedByTouch) {
+        startCamera(); // 🔥 direct (no await)
+        cameraStartedByTouch = true;
     }
+
     startVoice();
 }, { passive: true });
 
 document.body.addEventListener("touchend", () => stopVoiceSafe());
 
 // ==========================
-// MOUSE (LAPTOP)
+// 💻 MOUSE
 // ==========================
-document.body.addEventListener("mousedown", async () => {
+document.body.addEventListener("mousedown", function () {
     if (!cameraOn) {
-        await startCamera();
+        startCamera();
     }
     startVoice();
 });
