@@ -6,13 +6,12 @@ let cameraOn = false;
 let model = null;
 let detecting = false;
 
-let lastState = ""; // "obstacle" or "clear"
+let lastState = "";
 let lastSpokenTime = 0;
 
-// 🔊 Speak (with cooldown)
+// 🔊 Speak
 function speak(text) {
     const now = Date.now();
-
     if (now - lastSpokenTime < 2000) return;
 
     lastSpokenTime = now;
@@ -25,8 +24,7 @@ function speak(text) {
 // 🧠 Debug
 function updateStatus(text) {
     console.log("STATUS:", text);
-    const el = document.getElementById("statusText");
-    if (el) el.innerText = "Action: " + text;
+    document.getElementById("statusText").innerText = "Action: " + text;
 }
 
 // ==========================
@@ -43,19 +41,15 @@ async function loadModel() {
         speak("Detection ready");
 
     } catch {
-        updateStatus("Model failed");
         speak("Model failed");
     }
 }
 
 // ==========================
-// 📷 Start Camera
+// 📷 Start Camera (FIXED)
 // ==========================
 async function startCamera() {
-    if (cameraOn) {
-        speak("Camera already running");
-        return;
-    }
+    if (cameraOn) return;
 
     try {
         const video = document.getElementById("camera");
@@ -73,8 +67,9 @@ async function startCamera() {
 
         if (model) startDetection();
 
-    } catch {
-        speak("Tap and try again");
+    } catch (err) {
+        console.error(err);
+        speak("Camera permission denied");
     }
 }
 
@@ -82,11 +77,6 @@ async function startCamera() {
 // 🛑 Stop Camera
 // ==========================
 function stopCamera() {
-    if (!cameraOn) {
-        speak("Camera already stopped");
-        return;
-    }
-
     if (stream) {
         stream.getTracks().forEach(track => track.stop());
     }
@@ -99,7 +89,7 @@ function stopCamera() {
 }
 
 // ==========================
-// 🚧 DETECTION (UPDATED)
+// 🚧 DETECTION (IMPROVED)
 // ==========================
 function startDetection() {
     if (!model) return;
@@ -118,19 +108,26 @@ function startDetection() {
 
         predictions.forEach(p => {
             const [x, y, w, h] = p.bbox;
+
             let centerX = x + w / 2;
             let vw = video.videoWidth;
 
+            // 🎯 Center detection
             if (
-                centerX > vw * 0.3 &&
-                centerX < vw * 0.7 &&
-                p.score > 0.5
+                centerX > vw * 0.25 &&
+                centerX < vw * 0.75 &&
+                p.score > 0.4
             ) {
+                foundObstacle = true;
+            }
+
+            // 🔥 CLOSE OBJECT (big bounding box)
+            if (w > vw * 0.5) {
                 foundObstacle = true;
             }
         });
 
-        // 🔥 STATE CHANGE LOGIC
+        // 🔄 State change
         if (foundObstacle && lastState !== "obstacle") {
             lastState = "obstacle";
             updateStatus("Obstacle ahead");
@@ -142,7 +139,7 @@ function startDetection() {
             speak("Path clear");
         }
 
-    }, 2000);
+    }, 1500);
 }
 
 // ==========================
@@ -162,23 +159,14 @@ function startVoice() {
 
             speak("You said " + text);
 
-            if (
-                text.includes("start camera") ||
-                text.includes("open camera")
-            ) {
-                startCamera();
-            }
+            if (text.includes("start camera")) startCamera();
 
             else if (
                 text.includes("stop camera") ||
                 text.includes("camera off")
-            ) {
-                stopCamera();
-            }
+            ) stopCamera();
 
-            else if (text.includes("location")) {
-                getLocation();
-            }
+            else if (text.includes("location")) getLocation();
 
             else {
                 updateStatus("Not recognized");
@@ -215,12 +203,20 @@ function getLocation() {
 }
 
 // ==========================
-// TOUCH + MOUSE
+// TOUCH + MOUSE (FIXED)
 // ==========================
-document.body.addEventListener("touchstart", () => startVoice(), { passive: true });
+document.body.addEventListener("touchstart", () => {
+    if (!cameraOn) startCamera(); // 🔥 FIX
+    startVoice();
+}, { passive: true });
+
 document.body.addEventListener("touchend", () => stopVoiceSafe());
 
-document.body.addEventListener("mousedown", () => startVoice());
+document.body.addEventListener("mousedown", () => {
+    if (!cameraOn) startCamera();
+    startVoice();
+});
+
 document.body.addEventListener("mouseup", () => stopVoiceSafe());
 
 // ==========================
