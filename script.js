@@ -8,6 +8,7 @@ let detecting = false;
 
 let lastState = "";
 let lastSpokenTime = 0;
+let cameraInitialized = false; // 🔥 important
 
 // 🔊 Speak
 function speak(text) {
@@ -28,7 +29,7 @@ function updateStatus(text) {
 }
 
 // ==========================
-// 🤖 LOAD MODEL
+// 🤖 Load Model
 // ==========================
 async function loadModel() {
     try {
@@ -46,10 +47,10 @@ async function loadModel() {
 }
 
 // ==========================
-// 📷 Start Camera (FIXED)
+// 📷 Start Camera (FIXED FOR MOBILE)
 // ==========================
-async function startCamera() {
-    if (cameraOn) return;
+async function startCameraDirect() {
+    if (cameraInitialized) return;
 
     try {
         const video = document.getElementById("camera");
@@ -62,8 +63,10 @@ async function startCamera() {
         await video.play();
 
         cameraOn = true;
-        updateStatus("Camera started");
-        speak("Camera started");
+        cameraInitialized = true;
+
+        updateStatus("Camera ready");
+        speak("Camera ready");
 
         if (model) startDetection();
 
@@ -83,13 +86,14 @@ function stopCamera() {
 
     cameraOn = false;
     detecting = false;
+    cameraInitialized = false;
 
     updateStatus("Camera stopped");
     speak("Camera stopped");
 }
 
 // ==========================
-// 🚧 DETECTION (IMPROVED)
+// 🚧 Detection (40cm approx)
 // ==========================
 function startDetection() {
     if (!model) return;
@@ -112,22 +116,19 @@ function startDetection() {
             let centerX = x + w / 2;
             let vw = video.videoWidth;
 
-            // 🎯 Center detection
-            if (
-                centerX > vw * 0.25 &&
-                centerX < vw * 0.75 &&
-                p.score > 0.4
-            ) {
-                foundObstacle = true;
-            }
+            // 🎯 center zone
+            let inCenter =
+                centerX > vw * 0.3 &&
+                centerX < vw * 0.7;
 
-            // 🔥 CLOSE OBJECT (big bounding box)
-            if (w > vw * 0.5) {
+            // 🔥 simulate ~40cm (big object = near)
+            let isNear = w > vw * 0.4;
+
+            if ((inCenter && p.score > 0.5) || isNear) {
                 foundObstacle = true;
             }
         });
 
-        // 🔄 State change
         if (foundObstacle && lastState !== "obstacle") {
             lastState = "obstacle";
             updateStatus("Obstacle ahead");
@@ -139,7 +140,7 @@ function startDetection() {
             speak("Path clear");
         }
 
-    }, 1500);
+    }, 1200);
 }
 
 // ==========================
@@ -159,9 +160,7 @@ function startVoice() {
 
             speak("You said " + text);
 
-            if (text.includes("start camera")) startCamera();
-
-            else if (
+            if (
                 text.includes("stop camera") ||
                 text.includes("camera off")
             ) stopCamera();
@@ -169,8 +168,7 @@ function startVoice() {
             else if (text.includes("location")) getLocation();
 
             else {
-                updateStatus("Not recognized");
-                speak("Command not recognized");
+                updateStatus("Listening");
             }
         };
 
@@ -203,17 +201,20 @@ function getLocation() {
 }
 
 // ==========================
-// TOUCH + MOUSE (FIXED)
+// TOUCH (🔥 CRITICAL FIX)
 // ==========================
 document.body.addEventListener("touchstart", () => {
-    if (!cameraOn) startCamera(); // 🔥 FIX
+    startCameraDirect(); // 🔥 MUST be first
     startVoice();
 }, { passive: true });
 
 document.body.addEventListener("touchend", () => stopVoiceSafe());
 
+// ==========================
+// MOUSE (Laptop)
+// ==========================
 document.body.addEventListener("mousedown", () => {
-    if (!cameraOn) startCamera();
+    startCameraDirect();
     startVoice();
 });
 
@@ -223,6 +224,6 @@ document.body.addEventListener("mouseup", () => stopVoiceSafe());
 // INIT
 // ==========================
 window.onload = function () {
-    speak("Hold and speak");
+    speak("Touch and hold to use");
     loadModel();
 };
