@@ -6,8 +6,17 @@ let cameraOn = false;
 let model = null;
 let detecting = false;
 
-// 🔊 Speak
+let lastState = ""; // "obstacle" or "clear"
+let lastSpokenTime = 0;
+
+// 🔊 Speak (with cooldown)
 function speak(text) {
+    const now = Date.now();
+
+    if (now - lastSpokenTime < 2000) return;
+
+    lastSpokenTime = now;
+
     const msg = new SpeechSynthesisUtterance(text);
     speechSynthesis.cancel();
     speechSynthesis.speak(msg);
@@ -33,7 +42,7 @@ async function loadModel() {
         updateStatus("Detection ready");
         speak("Detection ready");
 
-    } catch (e) {
+    } catch {
         updateStatus("Model failed");
         speak("Model failed");
     }
@@ -43,7 +52,10 @@ async function loadModel() {
 // 📷 Start Camera
 // ==========================
 async function startCamera() {
-    if (cameraOn) return;
+    if (cameraOn) {
+        speak("Camera already running");
+        return;
+    }
 
     try {
         const video = document.getElementById("camera");
@@ -62,7 +74,7 @@ async function startCamera() {
         if (model) startDetection();
 
     } catch {
-        speak("Camera blocked");
+        speak("Tap and try again");
     }
 }
 
@@ -70,7 +82,10 @@ async function startCamera() {
 // 🛑 Stop Camera
 // ==========================
 function stopCamera() {
-    if (!cameraOn) return;
+    if (!cameraOn) {
+        speak("Camera already stopped");
+        return;
+    }
 
     if (stream) {
         stream.getTracks().forEach(track => track.stop());
@@ -84,7 +99,7 @@ function stopCamera() {
 }
 
 // ==========================
-// 🚧 Detection
+// 🚧 DETECTION (UPDATED)
 // ==========================
 function startDetection() {
     if (!model) return;
@@ -99,7 +114,7 @@ function startDetection() {
 
         const predictions = await model.detect(video);
 
-        let found = false;
+        let foundObstacle = false;
 
         predictions.forEach(p => {
             const [x, y, w, h] = p.bbox;
@@ -111,20 +126,27 @@ function startDetection() {
                 centerX < vw * 0.7 &&
                 p.score > 0.5
             ) {
-                found = true;
+                foundObstacle = true;
             }
         });
 
-        if (found) {
+        // 🔥 STATE CHANGE LOGIC
+        if (foundObstacle && lastState !== "obstacle") {
+            lastState = "obstacle";
             updateStatus("Obstacle ahead");
             speak("Obstacle ahead");
+        }
+        else if (!foundObstacle && lastState !== "clear") {
+            lastState = "clear";
+            updateStatus("Path clear");
+            speak("Path clear");
         }
 
     }, 2000);
 }
 
 // ==========================
-// 🎤 Voice (IMPROVED)
+// 🎤 Voice
 // ==========================
 function startVoice() {
     if (isListening) return;
@@ -140,27 +162,20 @@ function startVoice() {
 
             speak("You said " + text);
 
-            // 🔥 START CAMERA
             if (
                 text.includes("start camera") ||
-                text.includes("open camera") ||
-                text.includes("turn on camera")
+                text.includes("open camera")
             ) {
                 startCamera();
             }
 
-            // 🔥 STOP CAMERA (FIXED)
             else if (
                 text.includes("stop camera") ||
-                text.includes("camera off") ||
-                text.includes("turn off camera") ||
-                text.includes("close camera") ||
-                (text.includes("camera") && text.includes("stop"))
+                text.includes("camera off")
             ) {
                 stopCamera();
             }
 
-            // LOCATION
             else if (text.includes("location")) {
                 getLocation();
             }
@@ -195,25 +210,24 @@ function stopVoiceSafe() {
 // ==========================
 function getLocation() {
     navigator.geolocation.getCurrentPosition(pos => {
-        speak("Latitude " + pos.coords.latitude);
+        let lat = pos.coords.latitude;
+        let lon = pos.coords.longitude;
+
+        updateStatus("Location fetched");
+
+        speak("Latitude " + lat + " and Longitude " + lon);
+    }, () => {
+        speak("Location access denied");
     });
 }
 
 // ==========================
 // TOUCH + MOUSE
 // ==========================
-document.body.addEventListener("touchstart", () => {
-    if (!cameraOn) startCamera();
-    startVoice();
-}, { passive: true });
-
+document.body.addEventListener("touchstart", () => startVoice(), { passive: true });
 document.body.addEventListener("touchend", () => stopVoiceSafe());
 
-document.body.addEventListener("mousedown", () => {
-    if (!cameraOn) startCamera();
-    startVoice();
-});
-
+document.body.addEventListener("mousedown", () => startVoice());
 document.body.addEventListener("mouseup", () => stopVoiceSafe());
 
 // ==========================
