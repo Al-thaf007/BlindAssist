@@ -6,13 +6,11 @@ let cameraOn = false;
 let model = null;
 let detecting = false;
 
-let lastState = ""; // "obstacle" or "clear"
 let lastSpokenTime = 0;
 
-// 🔊 Speak (with cooldown)
+// 🔊 Speak (cooldown)
 function speak(text) {
     const now = Date.now();
-
     if (now - lastSpokenTime < 2000) return;
 
     lastSpokenTime = now;
@@ -49,13 +47,10 @@ async function loadModel() {
 }
 
 // ==========================
-// 📷 Start Camera
+// 📷 START CAMERA
 // ==========================
 async function startCamera() {
-    if (cameraOn) {
-        speak("Camera already running");
-        return;
-    }
+    if (cameraOn) return;
 
     try {
         const video = document.getElementById("camera");
@@ -74,18 +69,15 @@ async function startCamera() {
         if (model) startDetection();
 
     } catch {
-        speak("Tap and try again");
+        speak("Camera permission denied");
     }
 }
 
 // ==========================
-// 🛑 Stop Camera
+// 🛑 STOP CAMERA
 // ==========================
 function stopCamera() {
-    if (!cameraOn) {
-        speak("Camera already stopped");
-        return;
-    }
+    if (!cameraOn) return;
 
     if (stream) {
         stream.getTracks().forEach(track => track.stop());
@@ -99,13 +91,17 @@ function stopCamera() {
 }
 
 // ==========================
-// 🚧 DETECTION (UPDATED)
+// 🚧 SMART DETECTION
 // ==========================
 function startDetection() {
     if (!model) return;
 
     const video = document.getElementById("camera");
     detecting = true;
+
+    let currentStableState = "";
+    let lastDetectedState = "";
+    let stableCount = 0;
 
     updateStatus("Detection running");
 
@@ -118,35 +114,48 @@ function startDetection() {
 
         predictions.forEach(p => {
             const [x, y, w, h] = p.bbox;
-            let centerX = x + w / 2;
-            let vw = video.videoWidth;
 
+            let vw = video.videoWidth;
+            let centerX = x + w / 2;
+            let sizeRatio = w / vw;
+
+            // 🎯 center OR near object
             if (
-                centerX > vw * 0.3 &&
-                centerX < vw * 0.7 &&
-                p.score > 0.5
+                (centerX > vw * 0.3 && centerX < vw * 0.7 && p.score > 0.5)
+                || sizeRatio > 0.4
             ) {
                 foundObstacle = true;
             }
         });
 
-        // 🔥 STATE CHANGE LOGIC
-        if (foundObstacle && lastState !== "obstacle") {
-            lastState = "obstacle";
-            updateStatus("Obstacle ahead");
-            speak("Obstacle ahead");
-        }
-        else if (!foundObstacle && lastState !== "clear") {
-            lastState = "clear";
-            updateStatus("Path clear");
-            speak("Path clear");
+        let detectedState = foundObstacle ? "obstacle" : "clear";
+
+        // 🔥 stability check
+        if (detectedState === lastDetectedState) {
+            stableCount++;
+        } else {
+            stableCount = 0;
         }
 
-    }, 2000);
+        lastDetectedState = detectedState;
+
+        if (stableCount >= 2 && detectedState !== currentStableState) {
+            currentStableState = detectedState;
+
+            if (detectedState === "obstacle") {
+                updateStatus("Obstacle ahead");
+                speak("Obstacle ahead");
+            } else {
+                updateStatus("Path clear");
+                speak("Path clear");
+            }
+        }
+
+    }, 1000);
 }
 
 // ==========================
-// 🎤 Voice
+// 🎤 VOICE
 // ==========================
 function startVoice() {
     if (isListening) return;
@@ -181,8 +190,7 @@ function startVoice() {
             }
 
             else {
-                updateStatus("Not recognized");
-                speak("Command not recognized");
+                updateStatus("Listening");
             }
         };
 
@@ -206,7 +214,7 @@ function stopVoiceSafe() {
 }
 
 // ==========================
-// 📍 Location
+// 📍 LOCATION (LAT + LON)
 // ==========================
 function getLocation() {
     navigator.geolocation.getCurrentPosition(pos => {
@@ -215,25 +223,40 @@ function getLocation() {
 
         updateStatus("Location fetched");
 
-        speak("Latitude " + lat + " and Longitude " + lon);
+        speak("Your location is latitude " + lat + " and longitude " + lon);
     }, () => {
         speak("Location access denied");
     });
 }
 
 // ==========================
-// TOUCH + MOUSE
+// TOUCH (MOBILE FIX)
 // ==========================
-document.body.addEventListener("touchstart", () => startVoice(), { passive: true });
+document.body.addEventListener("touchstart", async () => {
+    if (!cameraOn) {
+        await startCamera(); // 🔥 required for mobile
+    }
+    startVoice();
+}, { passive: true });
+
 document.body.addEventListener("touchend", () => stopVoiceSafe());
 
-document.body.addEventListener("mousedown", () => startVoice());
+// ==========================
+// MOUSE (LAPTOP)
+// ==========================
+document.body.addEventListener("mousedown", async () => {
+    if (!cameraOn) {
+        await startCamera();
+    }
+    startVoice();
+});
+
 document.body.addEventListener("mouseup", () => stopVoiceSafe());
 
 // ==========================
 // INIT
 // ==========================
 window.onload = function () {
-    speak("Hold and speak");
+    speak("Touch and hold to use");
     loadModel();
 };
